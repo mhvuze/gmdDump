@@ -9,7 +9,7 @@ namespace gmdDump
 {
     class Helper
     {
-        static public string readNullterminated(BinaryReader reader)
+        public static string readNullterminated(BinaryReader reader)
         {
             var char_array = new List<byte>();
             string str = "";
@@ -28,6 +28,15 @@ namespace gmdDump
             byte[] char_bytes = char_array.ToArray();
             str = Encoding.UTF8.GetString(char_bytes);
             return str;
+        }
+
+        // from http://stackoverflow.com/a/3294698/5343630
+        public static uint swapEndianness(uint x)
+        {
+            return ((x & 0x000000ff) << 24) +  // First byte
+                   ((x & 0x0000ff00) << 8) +   // Second byte
+                   ((x & 0x00ff0000) >> 8) +   // Third byte
+                   ((x & 0xff000000) >> 24);   // Fourth byte
         }
     }
 }
