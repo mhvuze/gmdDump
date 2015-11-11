@@ -24,62 +24,25 @@ namespace gmdDump
 
             string input = args[0];
             string output = Path.GetDirectoryName(input) + "\\" + Path.GetFileNameWithoutExtension(input) + ".txt";
-            bool BigEndian = false;
-            long input_size = new FileInfo(input).Length;
-            BinaryReader reader = new BinaryReader(File.OpenRead(input));
 
-            // Handle input / output files
-            int header = reader.ReadInt32();
-            if (header == 0x00444D47)
+            // Read File
+            FileStream _MyStream = new FileStream(input, FileMode.Open);
+            byte[] _Buffer = new byte[_MyStream.Length];
+            _MyStream.Read(_Buffer, 0, _Buffer.Length);
+            _MyStream.Close();
+
+            // Resize Buffer
+            int Size = (_Buffer[0x18] | (_Buffer[0x19] << 8) | (_Buffer[0x1A] << 16) | (_Buffer[0x1B] << 32));
+            _Buffer = _Buffer.Skip(_Buffer.Length - Size).ToArray();
+
+            // Decoding
+            string OutputStr = "# " + Encoding.UTF8.GetString(_Buffer, 0, _Buffer.Length);
+            OutputStr = OutputStr.Replace("\0", "\r\n# ");
+            OutputStr = OutputStr.Substring(0, OutputStr.Length - 2);
+            
+            using (StreamWriter writer = new StreamWriter(output, true, Encoding.UTF8))
             {
-                BigEndian = false;
-            }
-            else if (header == 0x474D4400) 
-            {
-                BigEndian = true;
-            }
-            else
-            {
-                Console.WriteLine("ERROR: Invalid input file specified, aborting.");
-                return;
-            }
-
-            if (File.Exists(output))
-                File.Delete(output);
-
-            // Process input file
-            UInt32 string_count = 0;
-            if (BigEndian == true)
-            {
-                reader.BaseStream.Seek(0x18, SeekOrigin.Begin);
-                string_count = reader.ReadUInt32();
-                reader.BaseStream.Seek(0x04, SeekOrigin.Current);
-                UInt32 table_size = reader.ReadUInt32();
-
-                string_count = Helper.swapEndianness(string_count);
-                table_size = Helper.swapEndianness(table_size);
-
-                UInt32 table_start = Convert.ToUInt32(input_size) - table_size;
-                reader.BaseStream.Seek(table_start, SeekOrigin.Begin);
-            }
-            else
-            {
-                reader.BaseStream.Seek(0x10, SeekOrigin.Begin);
-                string_count = reader.ReadUInt32();
-                reader.BaseStream.Seek(0x04, SeekOrigin.Current);
-                UInt32 table_size = reader.ReadUInt32();
-
-                UInt32 table_start = Convert.ToUInt32(input_size) - table_size;
-                reader.BaseStream.Seek(table_start, SeekOrigin.Begin);
-            }
-
-            for (int i = 0; i < string_count; i++)
-            {
-                string str = Helper.readNullterminated(reader).Replace("\r\n", "<LINE>");
-                using(StreamWriter writer = new StreamWriter(output, true, Encoding.UTF8))
-                {
-                    writer.WriteLine(str);
-                }
+                writer.Write(OutputStr);
             }
 
             Console.WriteLine("INFO: Finished processing " + Path.GetFileName(input) + "!");
