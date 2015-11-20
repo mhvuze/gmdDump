@@ -11,17 +11,6 @@ namespace gmdDump
     {
         static void Main(string[] args)
         {
-            //  3DS GMD; UTF8 encoding
-            // 0000|4|Magic gmd/x00
-            // 0004|4|Unknown
-            // 0008|4|Language flag (00 = JPN, 01 = ENG, 02 = FRE, 03 = SPA, 04 = GER, 05 = ITA)
-            // 000C|4|Segment title count
-            // 0010|4|String count
-            // 0014|4|?? count
-            // 0018|4|String table size
-            // 001C|4|Name length x
-            // 0020|x|Name string
-
             string input = args[0];
             string output = Path.GetDirectoryName(input) + "\\" + Path.GetFileNameWithoutExtension(input) + ".txt";
             bool BigEndian = false;
@@ -30,6 +19,8 @@ namespace gmdDump
 
             // Handle input / output files
             int header = reader.ReadInt32();
+            int version = reader.ReadInt32();
+
             if (header == 0x00444D47)
             {
                 BigEndian = false;
@@ -49,6 +40,7 @@ namespace gmdDump
 
             // Process input file
             UInt32 string_count = 0;
+
             if (BigEndian == true)
             {
                 reader.BaseStream.Seek(0x18, SeekOrigin.Begin);
@@ -64,15 +56,36 @@ namespace gmdDump
             }
             else
             {
-                reader.BaseStream.Seek(0x10, SeekOrigin.Begin);
+                int s_count_offset = 0;
+                int t_size_offset = 0;
+
+                // Handle version offset differences
+                if (version == 0x00010201 || version == 0x00010101) // MH3U EU, MH3G JP
+                {
+                    s_count_offset = 0x10;
+                    t_size_offset = 0x18;
+                }
+                else if (version == 0x00010302) // MHX JP
+                {
+                    s_count_offset = 0x18;
+                    t_size_offset = 0x20; 
+                }
+                else
+                {
+                    Console.WriteLine("ERROR: Unsupported GM version, aborting.");
+                    return;
+                }
+
+                reader.BaseStream.Seek(s_count_offset, SeekOrigin.Begin);
                 string_count = reader.ReadUInt32();
-                reader.BaseStream.Seek(0x04, SeekOrigin.Current);
+                reader.BaseStream.Seek(t_size_offset, SeekOrigin.Begin);
                 UInt32 table_size = reader.ReadUInt32();
 
                 UInt32 table_start = Convert.ToUInt32(input_size) - table_size;
                 reader.BaseStream.Seek(table_start, SeekOrigin.Begin);
             }
 
+            // Process strings in string table
             for (int i = 0; i < string_count; i++)
             {
                 string str = Helper.readNullterminated(reader).Replace("\r\n", "<LINE>");
