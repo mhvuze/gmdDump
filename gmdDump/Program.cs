@@ -12,7 +12,7 @@ namespace gmdDump
         static void Main(string[] args)
         {
             string input = args[0];
-            string output = Path.GetDirectoryName(input) + "\\" + Path.GetFileNameWithoutExtension(input) + ".txt";
+            string output = Path.GetFileNameWithoutExtension(input) + ".txt"; // Path.GetDirectoryName(input) + "\\" + 
             bool BigEndian = false;
             long input_size = new FileInfo(input).Length;
             BinaryReader reader = new BinaryReader(File.OpenRead(input));
@@ -64,6 +64,7 @@ namespace gmdDump
                 {
                     s_count_offset = 0x10;
                     t_size_offset = 0x18;
+                        
                 }
                 else if (version == 0x00010302) // MHX JP
                 {
@@ -72,14 +73,25 @@ namespace gmdDump
                 }
                 else
                 {
-                    Console.WriteLine("ERROR: Unsupported GM version, aborting.");
+                    Console.WriteLine("ERROR: Unsupported GMD version, aborting.");
                     return;
                 }
 
                 reader.BaseStream.Seek(s_count_offset, SeekOrigin.Begin);
                 string_count = reader.ReadUInt32();
+
                 reader.BaseStream.Seek(t_size_offset, SeekOrigin.Begin);
                 UInt32 table_size = reader.ReadUInt32();
+
+                // Whacky handling of DD:DA PC gmd, since it also has version 0x00010201 but other offsets
+                if (string_count == 0)
+                {
+                    reader.BaseStream.Seek(0x18, SeekOrigin.Begin);
+                    string_count = reader.ReadUInt32();
+
+                    reader.BaseStream.Seek(0x20, SeekOrigin.Begin);
+                    table_size = reader.ReadUInt32();
+                }
 
                 UInt32 table_start = Convert.ToUInt32(input_size) - table_size;
                 reader.BaseStream.Seek(table_start, SeekOrigin.Begin);
