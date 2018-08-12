@@ -21,25 +21,16 @@ namespace gmdDump
             int header = reader.ReadInt32();
             int version = reader.ReadInt32();
 
-            if (header == 0x00444D47)
-            {
-                BigEndian = false;
-            }
-            else if (header == 0x474D4400) 
-            {
-                BigEndian = true;
-            }
-            else
-            {
-                Console.WriteLine("ERROR: Invalid input file specified, aborting.");
-                return;
-            }
+            if (header == 0x00444D47) { BigEndian = false; Console.WriteLine("File is LE."); }
+            else if (header == 0x474D4400)  { BigEndian = true; Console.WriteLine("File is BE."); }
+            else { Console.WriteLine("ERROR: Invalid input file specified, aborting."); return; }
 
             if (File.Exists(output))
                 File.Delete(output);
 
             // Process input file
-            UInt32 string_count = 0;
+            UInt32 identifier_count = 0;
+            UInt32 string_count = 0;            
 
             if (BigEndian == true)
             {
@@ -56,6 +47,8 @@ namespace gmdDump
             }
             else
             {
+                int identifier_count_offset = 0;
+                int identifier_size_offset = 0;
                 int s_count_offset = 0;
                 int t_size_offset = 0;
 
@@ -66,8 +59,10 @@ namespace gmdDump
                     t_size_offset = 0x18;
                         
                 }
-                else if (version == 0x00010302) // MHX JP
+                else if (version == 0x00010302) // MHX JP, MHW
                 {
+                    identifier_count_offset = 0x14;
+                    identifier_size_offset = 0x1C;
                     s_count_offset = 0x18;
                     t_size_offset = 0x20; 
                 }
@@ -76,6 +71,12 @@ namespace gmdDump
                     Console.WriteLine("ERROR: Unsupported GMD version, aborting.");
                     return;
                 }
+
+                reader.BaseStream.Seek(identifier_count_offset, SeekOrigin.Begin);
+                identifier_count = reader.ReadUInt32();
+
+                reader.BaseStream.Seek(identifier_size_offset, SeekOrigin.Begin);
+                UInt32 i_table_size = reader.ReadUInt32();
 
                 reader.BaseStream.Seek(s_count_offset, SeekOrigin.Begin);
                 string_count = reader.ReadUInt32();
@@ -93,20 +94,52 @@ namespace gmdDump
                     table_size = reader.ReadUInt32();
                 }
 
-                UInt32 table_start = Convert.ToUInt32(input_size) - table_size;
+                UInt32 table_start = Convert.ToUInt32(input_size) - table_size - i_table_size;
                 reader.BaseStream.Seek(table_start, SeekOrigin.Begin);
             }
 
-            // Process strings in string table
-            for (int i = 0; i < string_count; i++)
+            if (BigEndian == true)
             {
-                string str = Helper.readNullterminated(reader).Replace("\r\n", "<LINE>");
-                using(StreamWriter writer = new StreamWriter(output, true, Encoding.UTF8))
+                // Process strings in string table
+                for (int i = 0; i < string_count; i++)
                 {
-                    writer.WriteLine(str);
+                    string str = Helper.readNullterminated(reader).Replace("\r\n", "<LINE>");
+                    using (StreamWriter writer = new StreamWriter(output, true, Encoding.UTF8))
+                    {
+                        writer.WriteLine(str);
+                    }
+                }
+            }
+            else
+            {
+                // Process strings in identifier table
+                for (int i = 0; i < identifier_count; i++)
+                {
+                    string str = Helper.readNullterminated(reader).Replace("\r\n", "<LINE>");
+                    using (StreamWriter writer = new StreamWriter(Path.GetFileNameWithoutExtension(input) + ".tmp", true, Encoding.UTF8))
+                    {
+                        writer.WriteLine(str + "_____");
+                    }
+                }
+
+                // Process strings in string table
+                for (int i = 0; i < string_count; i++)
+                {
+                    string line = "";
+                    string str = Helper.readNullterminated(reader).Replace("\r\n", "<LINE>");
+                    using (StreamReader Oreader = new StreamReader(Path.GetFileNameWithoutExtension(input) + ".tmp", Encoding.UTF8))
+                    {
+                        for (var j = 0; j < i; j++) { Oreader.ReadLine(); }
+                        line = Oreader.ReadLine() + str;
+                    }
+                    using (StreamWriter writer = new StreamWriter(output, true, Encoding.UTF8))
+                    {
+                        writer.WriteLine(line);
+                    }
                 }
             }
 
+            if (BigEndian == false) { File.Delete(Path.GetFileNameWithoutExtension(input) + ".tmp"); }
             Console.WriteLine("INFO: Finished processing " + Path.GetFileName(input) + "!");
         }
     }
